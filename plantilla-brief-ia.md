@@ -1,5 +1,3 @@
-Debe incluir como mínimo estas secciones:
-
 Título de la tarea
 Contexto
 Requerimientos técnicos
@@ -37,4 +35,15 @@ Uso obligatorio de type hints.
 Inclusión de tests automatizados.
 Cumplimiento del linter del proyecto.
 Restricción de librerías externas.
-Estos límites evitan implementaciones que rompan las reglas del proye
+Estos límites evitan implementaciones que rompan las reglas del proyecto.
+
+¿Qué define realmente la Definition of Done?
+La Definition of Done establece criterios verificables para considerar la tarea terminada.
+
+Puede incluir:
+
+Tests que deben pasar.
+Métricas de performance mínimas.
+Requisitos funcionales comprobables.
+Formato de salida esperado.
+Esto transforma una instrucción ambigua en un objetivo medible.
