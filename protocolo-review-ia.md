@@ -1,66 +1,132 @@
-¿Cómo crear un protocolo de review para código generado por IA?
-El segundo artefacto clave es el Protocolo de Review, una checklist fija de 5 puntos críticos que revisas antes de hacer commit.
+# Checklist de Revisión
 
-Su propósito es simple: detectar errores comunes en código generado por IA antes de que lleguen al repositorio.
+## 1. Alucinaciones de librerías
 
-Cada punto incluye:
-
-Una pregunta clave.
-Qué revisar exactamente.
-¿Cómo detectar alucinaciones de librerías?
-Las alucinaciones ocurren cuando la IA usa librerías o funciones inexistentes.
-
-Preguntas clave:
+### Pregunta clave
 
 ¿Ese import realmente existe?
-¿La librería es segura y mantenida?
-Qué revisar:
 
-Documentación oficial.
-Repositorio del paquete.
-Compatibilidad con tu entorno.
-¿Cómo revisar errores en lógica de negocio?
-La IA suele fallar en detalles matemáticos o reglas de negocio.
+La IA puede inventar:
 
-Ejemplos frecuentes:
+- librerías
+- funciones
+- APIs
+- métodos
 
-Uso incorrecto de floats para dinero.
-Redondeos erróneos.
-Cálculos acumulativos incorrectos.
-Qué revisar:
+**Verificar:**
 
-Fórmulas críticas.
-Condiciones límite.
-Casos edge.
-¿Qué revisar en seguridad antes de hacer commit?
-La seguridad debe verificarse incluso si el código parece correcto.
+- documentación oficial
+- existencia real del paquete
+- compatibilidad con la versión usada
 
-Busca problemas como:
+### Checklist
 
-Inyección SQL.
-Inputs sin validación.
-Credenciales expuestas.
-Manejo incorrecto de autenticación.
+- [ ] Los imports existen
+- [ ] Las funciones usadas son reales
+- [ ] La API corresponde a la versión actual
+
+## 2. Lógica de negocio sutil
+
+### Pregunta clave
+
+¿La lógica es realmente correcta?
+
+**Errores comunes generados por IA:**
+
+- cálculos incorrectos
+- redondeos incorrectos
+- manejo incorrecto de fechas
+- uso de float para dinero
+
+### Checklist
+
+- [ ] Los cálculos son correctos
+- [ ] El manejo de fechas es consistente
+- [ ] No se usa float para dinero
+- [ ] Edge cases están contemplados
+
+## 3. Seguridad
+
+### Pregunta clave
+
+¿El código introduce riesgos de seguridad?
+
 La IA puede generar código funcional pero inseguro.
 
-¿Cómo detectar pérdida de contexto en la respuesta de la IA?
-A veces la IA olvida partes del brief cuando el contexto es largo.
+**Revisar:**
 
-Preguntas clave:
+- validación de inputs
+- inyección (SQL, comandos, etc.)
+- exposición de secretos
+- manejo de datos sensibles
 
-¿Se respetaron todos los constraints?
-¿La solución sigue los requerimientos del brief?
-Qué revisar:
+### Checklist
 
-Dependencias permitidas.
-Estructura esperada.
-Reglas del proyecto.
-¿Qué quinto punto debes personalizar según tu stack?
-El último punto debe adaptarse a tu entorno técnico.
+- [ ] Inputs están validados
+- [ ] No hay riesgo de inyección
+- [ ] No se exponen credenciales
+- [ ] No se filtran datos sensibles
 
-Ejemplos:
+## 4. Context window
 
-Verificar que los tests nuevos se ejecuten correctamente.
-Revisar que no se registren datos sensibles en logs.
-Confirmar que el código respete estándares de arquitectura del proyecto.
-Este punto convierte el protocolo en una herramienta alineada con tu stack real.
+### Pregunta clave
+
+¿La IA olvidó algo del brief?
+
+Cuando el contexto es largo la IA puede ignorar:
+
+- constraints
+- decisiones arquitectónicas
+- requisitos técnicos
+- Definition of Done
+
+### Checklist
+
+- [ ] El código respeta el brief original
+- [ ] Se cumplen los constraints definidos
+- [ ] No se agregaron dependencias innecesarias
+- [ ] Se cumple la Definition of Done
+
+## 5. Punto personalizado del proyecto
+
+Este punto depende de tu stack o arquitectura.
+
+**Ejemplos comunes:**
+
+- cobertura de tests
+- métricas y observabilidad
+- logging
+- performance
+- compatibilidad con arquitectura
+
+### Checklist
+
+- [ ] Tests cubren el código nuevo
+- [ ] Logs no exponen datos sensibles
+- [ ] Performance es aceptable
+- [ ] Métricas funcionan correctamente
+
+## Resultado del Review
+
+- [ ] El código pasa los 5 puntos del protocolo
+- [ ] Se hicieron correcciones necesarias
+- [ ] El código está listo para commit
+
+**Reviewer:** ____________________  
+**Fecha:** ____________________
+
+---
+
+## Uso dentro del repositorio
+
+**Estructura recomendada:**
+
+```
+herramientas-ia/
+│
+├─ 01-planning/
+│   ├─ plantilla-brief-ia.md
+│   └─ protocolo-review-ia.md
+│
+└─ reflexion-semana-1.md
+```
