@@ -1,49 +1,84 @@
-Título de la tarea
-Contexto
-Requerimientos técnicos
-Constraints
-Definition of Done
-Cada sección cumple una función clave.
+# Technical Brief
 
-¿Qué debe incluir el contexto de la tarea?
-El contexto ayuda a la IA a entender el problema antes de proponer código o soluciones.
+## 1. Título de la tarea
 
-Debe describir:
+Nombre claro y específico de la funcionalidad o servicio a implementar.
 
-El sistema actual o entorno.
-El problema que se intenta resolver.
-El objetivo concreto de la tarea.
-Sin este bloque, la IA tiende a generar soluciones genéricas o incorrectas.
+Ejemplo:
+Servicio Desacoplado de Cálculo de Impuestos
 
-¿Qué deben especificar los requerimientos técnicos?
-Los requerimientos técnicos delimitan cómo debe implementarse la solución.
+---
 
-Incluyen detalles como:
+## 2. Contexto
 
-Lenguaje de programación.
-Patrones o arquitectura.
-Estructura de input y output.
-Integraciones necesarias.
-Esto reduce ambigüedad y evita que la IA invente enfoques incompatibles con tu stack.
+Describe el problema actual y por qué se necesita esta solución.
 
-¿Qué papel cumplen los constraints en el brief?
-Los constraints indican lo que la IA no debe hacer o los estándares que debe respetar.
+Incluye:
 
-Ejemplos comunes:
+- Cómo funciona el sistema actualmente
+- Qué problema existe (acoplamiento, deuda técnica, escalabilidad, etc.)
+- Qué se busca lograr con esta implementación
 
-Uso obligatorio de type hints.
-Inclusión de tests automatizados.
-Cumplimiento del linter del proyecto.
-Restricción de librerías externas.
-Estos límites evitan implementaciones que rompan las reglas del proyecto.
+Ejemplo de estructura:
 
-¿Qué define realmente la Definition of Done?
-La Definition of Done establece criterios verificables para considerar la tarea terminada.
+El sistema actual \***\*\_\_\_\_\*\***.
+Esto genera problemas como \***\*\_\_\_\_\*\***.
 
-Puede incluir:
+El objetivo de esta tarea es \***\*\_\_\_\_\*\*** para mejorar \***\*\_\_\_\_\*\***.
 
-Tests que deben pasar.
-Métricas de performance mínimas.
-Requisitos funcionales comprobables.
-Formato de salida esperado.
-Esto transforma una instrucción ambigua en un objetivo medible.
+---
+
+## 3. Requerimientos técnicos
+
+### Lenguaje / Stack
+
+- Lenguaje:
+- Versión mínima:
+- Framework (si aplica):
+
+Ejemplo:
+
+- Python 3.9+
+- FastAPI
+- PostgreSQL
+
+---
+
+### Arquitectura
+
+Describe patrones o principios a usar.
+
+Ejemplo:
+
+- Clean Architecture
+- Strategy Pattern
+- Dependency Injection
+- Stateless service
+
+---
+
+### Input esperado
+
+Define los datos de entrada.
+
+Ejemplo:
+
+```python
+InputObject
+- field_1: type
+- field_2: type
+```
+
+### 4. Constraints (Restricciones)
+
+- No usar librerías externas salvo las aprobadas por el equipo.
+- Implementar type hints en todo el código.
+- Seguir principios SOLID y buenas prácticas del lenguaje.
+- Separar claramente el dominio, estrategias y servicios principales.
+
+### 5. Definition of Done (DoD)
+
+El trabajo se considera terminado cuando:
+
+- El código pasa linters y convenciones de estilo adoptadas por el equipo (ej: flake8, black).
+- La cobertura de tests unitarios es al menos 90%.
