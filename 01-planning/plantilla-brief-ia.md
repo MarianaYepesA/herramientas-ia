@@ -1,19 +1,23 @@
+
+---
+
 # Technical Brief
 
 ## 1. Título de la tarea
-
-Agente de revisión de bugs del motor tribuario de Tributi, una plataforma tecnológica (fintech) colombiana diseñada para facilitar la elaboración y presentación de la declaración de renta de personas naturales.
+**Agente de Pruebas (Test Agent)** para Tributi y Contadia.
 
 ---
 
 ## 2. Contexto
+Durante la pre-temporada, el equipo de operaciones de Tributi realiza más de 2,000 pruebas manuales para asegurar que el motor tributario calcule correctamente los formularios (210, 110, etc.) bajo múltiples condiciones. 
 
+Actualmente, este proceso es extremadamente repetitivo y manual. Para probar un solo caso (ej. Pensión Voluntaria), un operador debe:
+1. Crear un correo de prueba.
+2. Registrar un nuevo usuario en Tributi o Contadia.
+3. Navegar por la app y llenar docenas de campos (muchas veces poniendo "0" repetitivamente solo para completar la información).
+4. Configurar variables clave (ej. residencia en el exterior vs. Colombia) que cambian radicalmente el árbol de preguntas desplegado.
 
-El sistema actual de motor tributario en Tributi está construido en un excel de 39,588,982 bytes que contiene las reglas de activación de las preguntas de la app, así como el calculo de los diferentes items del formulario 210, 110 o f160 según aplique. El equipo de tech se encarga de leer este excel con sus reglas específicas para llevar la lógica al front de la aplicación. La hoja de INPUTS es donde se mapean las respuestas del usuario a los diferentes objetos, ej: Bancos, fondos de pensiones, deducciones por medicina prepagada etc, de ahí los valores se llevan a otra hoja BIENES, INGRESOS, DEUDAS o GASTOS, dependiendo de a lo que corresponda el valor, despues de estandarizados los calculos en estas hojas, se llevan los valores a las hojas de Rentas_de_Trabajo, Rentas_No_Laborales, Rentas_de_Capital o de pensiones dependiendo de lo que aplique y despues a la hoja Optimización, en donde se verifica si el valor del impuesto es más bajo con dependientes del 10% o de 72 UVT y finalmente se llevan los valores al formulario, que posteriormente el usuario puede decidir presentar de manera automática, con conexión a la DIAN, o manual ingresando los valores con el instructivo generado
-
-Esto genera problemas como dificil rastreo de los bugs gracias a las diferentes hojas en las que puede estar el error, demora en realizar features nuevos ya que se debe rastrear todas las dependencias del input y posibles errores de lógica en el despliegue de preguntas de la app.
-
-El objetivo de esta tarea es desplegar un agente que entienda completamente la lógica del excel del motor tributario para que logre revisar las cards de bugs e indicar dónde está el error y cómo solucionarlo
+El objetivo de esta tarea es construir un Agente de IA (Test Agent) basado en código que entienda instrucciones en lenguaje natural (ej. *"Créame un usuario en Contadia, que viva en Colombia y tenga Pensión Voluntaria"*). El agente usará Tools (Herramientas) para crear el correo `@tributi.com`, registrar la cuenta y, de manera crucial, utilizar **Plantillas JSON (Fixtures)** predefinidas para llenar la data sin alucinar campos, modificando solo los parámetros que el operador solicitó.
 
 ---
 
@@ -24,309 +28,143 @@ El objetivo de esta tarea es desplegar un agente que entienda completamente la l
 | Componente | Tecnología |
 |---|---|
 | Lenguaje | Python 3.11+ |
-| Parsing Excel | openpyxl / xlrd |
-| API REST | FastAPI |
-| IA / LLM | Claude API (Anthropic) |
-| Logging | Python logging + Sentry |
-| Testing | pytest + pytest-asyncio |
-| Base de Datos (Opcional) | PostgreSQL + SQLAlchemy |
+| Framework API | FastAPI |
+| IA / LLM | Claude API (Anthropic) u OpenAI (para el ruteo de la intención) |
+| Framework de Agentes | LangChain, LlamaIndex, o un ruteador semántico propio |
+| Clientes HTTP | `httpx` (para comunicarse con el backend de Tributi/Contadia) |
+| Testing | pytest + pytest-mock |
+| Almacenamiento | Sistema de archivos local o S3 para los JSON de Plantillas (Fixtures) |
 
 ---
 
-### 4. Arquitectura
+## 4. Arquitectura (Hexagonal)
+
+### 1. DOMAIN (Objetos / Datos / Plantillas)
+* **Contenido:** `TestScenario`, `UserFixture`, `TemplateMetadata`
+* **Responsabilidad:** Define las estructuras de datos de las pruebas. Aquí viven los modelos que representan las plantillas con ceros por defecto (ej. `PensionVoluntariaTemplate`).
+
+### 2. APPLICATION (Lógica del Agente y Flujo)
+* **Contenido:** `TestAgentOrchestrator`, `ApplyTemplateUseCase`
+* **Responsabilidad:** Recibe el *prompt* del operador, usa el LLM para extraer las variables (Intención = Crear, Plataforma = Contadia, Contexto = Nacional, Objeto = PV), selecciona la plantilla correcta y ejecuta el flujo.
+
+### 3. INFRASTRUCTURE (Tools y Detalles Técnicos)
+* **Contenido:** `TributiAPIClient`, `ContadiaAPIClient`, `EmailGeneratorTool`, `LLMIntentParser`
+* **Responsabilidad:** Las herramientas reales que el agente ejecuta. Conexión con las APIs de Staging para registrar cuentas e inyectar las plantillas modificadas.
 
 ---
 
-### 1. DOMAIN (Objetos / Datos)
-* **Contenido:** Bug, Resultado
-* **Responsabilidad:** Define las reglas de negocio y las entidades principales.
+### Componentes principales (Esquema de Código)
 
-### 2. APPLICATION (Lógica de flujo)
-* **Contenido:** AnalizarBugUseCase
-* **Responsabilidad:** Coordina cómo se mueven los datos y qué acciones se ejecutan.
-
-### 3. INFRASTRUCTURE (Detalles técnicos)
-* **Contenido:** Excel, Claude API
-* **Responsabilidad:** Implementaciones externas, bases de datos y APIs.
-
----
-### Componentes principales
-
-#### DOMAIN (Objetos básicos)
+#### DOMAIN (Entidades)
 ```python
-# src/domain/Bug.py
-class Bug:
-    id: str
-    description: str  # "El impuesto es mayor al esperado"
-    expected_output: float
-    actual_output: float
-    affected_sheets: List[str]  # ["INGRESOS", "Rentas_de_Trabajo"]
+# src/domain/TestScenario.py
+from pydantic import BaseModel
+from typing import Dict, Any
 
-# src/domain/AnalysisResult.py
-class AnalysisResult:
-    bug_id: str
-    root_cause: str  # "Fórmula mal en D45"
-    affected_cells: List[str]  # ["D45", "D48"]
-    recommendations: List[str]  # ["Cambiar la fórmula así..."]
-    confidence: float  # 0.95
+class TestScenario(BaseModel):
+    platform: str  # "tributi" o "contadia"
+    residency: str # "colombia" o "exterior"
+    tax_objects: list[str] # ["pension_voluntaria", "dependientes"]
+    overrides: Dict[str, Any] # Cambios específicos sobre la plantilla
 ```
 
-#### APPLICATION (Flujo de trabajo)
+#### APPLICATION (Las Tools del Agente)
 ```python
-# src/application/AnalyzeBugUseCase.py
-class AnalyzeBugUseCase:
-    """
-    El flujo principal:
-    1. Recibe un bug
-    2. Lee el Excel
-    3. Envía a Claude
-    4. Retorna el análisis
-    """
+# src/application/tools/ProvisioningTools.py
+class ProvisioningTools:
     
-    def execute(self, bug: Bug) -> AnalysisResult:
-        # 1. Obtener datos del Excel
-        excel_data = self.excel_service.load()
-        
-        # 2. Enviar a Claude para análisis
-        analysis = self.ai_service.analyze(bug, excel_data)
-        
-        # 3. Retornar resultado
-        return analysis
-```
-
-#### INFRASTRUCTURE (Lo técnico)
-```python
-# src/infrastructure/ExcelService.py
-class ExcelService:
-    """Lee el Excel y extrae la información"""
-    
-    def load(self) -> Dict:
-        # Abre motor.xlsx
-        # Lee todas las hojas
-        # Extrae fórmulas y valores
-        # Retorna todo en un diccionario
+    def generate_tributi_email(self, scenario_name: str) -> str:
+        """Genera un correo tipo test-pv-exterior-1234@tributi.com"""
         pass
 
-# src/infrastructure/ClaudeService.py
-class ClaudeService:
-    """Habla con Claude API"""
-    
-    def analyze(self, bug: Bug, excel_data: Dict) -> AnalysisResult:
-        # Prepara el mensaje para Claude
-        prompt = f"""
-        El usuario reporta este bug:
-        {bug.description}
-        
-        Valor esperado: {bug.expected_output}
-        Valor actual: {bug.actual_output}
-        
-        Aquí está la información del Excel:
-        {excel_data}
-        
-        ¿Dónde está el error y cómo se soluciona?
+    def load_and_modify_template(self, scenario: TestScenario) -> dict:
         """
-        
-        # Llama a Claude
-        response = claude_client.messages.create(
-            model="claude-opus",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        # Parsea la respuesta y retorna AnalysisResult
-        return self._parse_response(response)
+        Carga la plantilla JSON (ej. PV) que tiene todo en 0, 
+        y le cambia el flag de 'residencia_colombia' según el TestScenario.
+        """
+        pass
 ```
-### Input esperado
 
-Define los datos de entrada que el sistema recibe.
-
-### BugRequest (Input del endpoint)
+#### APPLICATION (El Orquestador)
 ```python
-class BugRequest:
-    id: str
-        # Identificador único del bug
-        # Ejemplo: "BUG-001"
+# src/application/TestAgentOrchestrator.py
+class TestAgentOrchestrator:
+    """Interpreta el prompt del operador de Operaciones y ejecuta las Tools"""
     
-    description: str
-        # Descripción del problema reportado
-        # Ejemplo: "El impuesto calculado es mayor al esperado"
-    
-    expected_output: float
-        # Valor que debería ser el resultado
-        # Ejemplo: 5000000
-    
-    actual_output: float
-        # Valor actual (incorrecto) que se obtiene
-        # Ejemplo: 7500000
-    
-    affected_sheets: List[str]
-        # Hojas del Excel donde el usuario cree que está el error
-        # Ejemplo: ["INGRESOS", "Optimización"]
-        # Opcional, por defecto []
+    def execute_from_prompt(self, prompt: str) -> str:
+        # 1. LLM extrae variables estructuradas (TestScenario)
+        scenario = self.llm_parser.parse_intent(prompt)
+        
+        # 2. Se genera el email
+        email = self.tools.generate_tributi_email(scenario.tax_objects[0])
+        
+        # 3. Se crea el usuario en la plataforma correcta (Tributi o Contadia)
+        user_id = self.api_client.register_user(scenario.platform, email)
+        
+        # 4. Se prepara la plantilla (ej. llena de ceros pero con residencia=exterior)
+        payload = self.tools.load_and_modify_template(scenario)
+        
+        # 5. Se inyecta la data en el backend
+        self.api_client.inject_user_data(user_id, payload)
+        
+        return f"¡Listo! Cuenta {email} creada en {scenario.platform} con los datos inyectados."
 ```
-### Ejemplo JSON de entrada
+
+---
+
+## 5. Input esperado
+
+### Desde el Frontend Interno (Lo que envía el Operador)
 ```json
 {
-  "id": "BUG-001",
-  "description": "El impuesto calculado es mayor al esperado cuando se aplica el factor de dependiente",
-  "expected_output": 5000000,
-  "actual_output": 7500000,
-  "affected_sheets": ["GASTOS", "Optimización"]
+  "operator_prompt": "Créame una cuenta en Contadia para alguien en el exterior, necesita tener el objeto de Pensión Voluntaria y Rentas de Capital.",
+  "environment": "staging"
 }
 ```
 
-
-### 4. Constraints (Restricciones)
-### Generales
-
-- No usar librerías externas salvo las aprobadas: openpyxl, FastAPI, pytest, anthropic
-- Implementar **type hints en todo el código** (obligatorio)
-- No hay excepciones: todos los métodos deben tener tipos
-### Code Quality
-
-- Seguir principios SOLID:
-  - **Single Responsibility**: Una clase, una responsabilidad
-  - **Open/Closed**: Abierto para extensión, cerrado para modificación
-  - **Liskov Substitution**: Las subclases deben ser sustituibles
-  - **Interface Segregation**: Interfaces específicas, no generales
-  - **Dependency Inversion**: Depender de abstracciones, no de implementaciones
-
-- Buenas prácticas Python:
-  - PEP 8: Nombres descriptivos, espacios, longitud de líneas < 100
-  - Docstrings en todas las clases y métodos públicos
-  - No usar `*` o `**` sin necesidad
-
-### Seguridad
-
-- La API Key de Claude NO debe estar en el código
-- Usar variables de entorno (.env)
-- Validar todos los inputs
+### Lo que el LLM del Agente debe parsear (Structured Output)
+```json
+{
+  "platform": "contadia",
+  "residency": "exterior",
+  "tax_objects": ["pension_voluntaria", "rentas_capital"]
+}
+```
 
 ---
 
-## 8. Definition of Done (DoD)
+## 6. Constraints (Restricciones)
 
-El trabajo se considera terminado cuando **TODOS** los siguientes criterios se cumplen:
+### Restricciones de Dominio y Negocio
+- **No Alucinación de Datos:** El LLM **NUNCA** debe generar el JSON de los activos o ingresos desde cero. **Siempre** debe basarse en las plantillas predefinidas en el repositorio.
+- **Dominios Controlados:** Todos los correos generados deben terminar obligatoriamente en `@tributi.com`.
+- **Ambientes Seguros:** El agente solo tendrá credenciales y acceso a las APIs de los ambientes de `Staging`, `QA` o `Desarrollo`. NUNCA en producción.
 
 ### Code Quality
+- Seguir principios SOLID y la arquitectura hexagonal descrita.
+- **Type hints obligatorios** en todo el proyecto.
+- Manejo estricto de errores (ej. ¿Qué pasa si el operador pide una plantilla de un objeto que no existe?).
 
-- [ ] El código pasa **flake8** sin errores ni warnings
-```bash
-  flake8 src/ --max-line-length=100 --extend-ignore=E203,W503
-```
+---
 
-- [ ] El código está formateado con **black**
-```bash
-  black src/ --line-length=100 --check
-```
+## 7. Definition of Done (DoD)
 
-- [ ] Todos los métodos y clases públicas tienen **type hints** completos
-```python
-  def analyze(self, bug: Bug) -> AnalysisResult:
-```
+### Calidad de Código y Arquitectura
+- [ ] El código pasa `flake8` y `black`.
+- [ ] Implementación estricta de Type Hints en todas las capas.
+- [ ] Separación clara entre los prompts del LLM, las Tools, y la lógica de negocio.
 
-- [ ] Todos los métodos y clases públicas tienen **docstrings**
-```python
-  def analyze(self, bug: Bug) -> AnalysisResult:
-      """
-      Analiza un bug y retorna el resultado.
-      
-      Args:
-          bug: Objeto Bug con la información del problema
-      
-      Returns:
-          AnalysisResult con el análisis
-      
-      Raises:
-          ValueError: Si el bug no tiene descripción
-      """
-```
-
-- [ ] No hay código muerto o importaciones no utilizadas
+### Plantillas (Fixtures)
+- [ ] Existe un directorio `src/infrastructure/templates/` con al menos las plantillas base JSON para flujos críticos (ej. `pension_voluntaria.json`, `exterior_base.json`).
 
 ### Testing
+- [ ] Cobertura de tests unitarios ≥ 90% (`pytest --cov=src`).
+- [ ] El parseo de intención del LLM está probado (mockeando la respuesta de Claude/OpenAI para asegurar que retorna el `TestScenario` correcto).
+- [ ] Tests de integración que validen que una plantilla se modifica correctamente antes de enviarse al motor.
 
-- [ ] Cobertura de tests unitarios **≥ 90%**
-```bash
-  pytest --cov=src --cov-report=html
-```
-
-- [ ] **100% de cobertura** en clases del Domain
-  - Todas las clases en `src/domain/` deben tener cobertura completa
-
-- [ ] Al menos **80% de cobertura** en servicios
-  - `ExcelService`, `ClaudeService` deben tener ≥80%
-
-- [ ] Todos los tests pasan correctamente
-```bash
-  pytest -v
-```
-
-- [ ] Los tests tienen nombres descriptivos
-```python
-  def test_analyze_bug_returns_analysis_result_when_valid_bug():
-```
-
-- [ ] Hay fixtures para datos de prueba reutilizables
-```python
-  @pytest.fixture
-  def sample_bug() -> Bug:
-      return Bug(...)
-```
-
-### Arquitectura
-
-- [ ] Existe separación clara entre Domain, Application e Infrastructure
-- [ ] Las clases Domain no importan nada de Infrastructure
-- [ ] Los servicios reciben sus dependencias inyectadas
-- [ ] Existe documentación del flujo en el README
-
-### Documentation
-
-- [ ] Existe **README.md** con:
-  - Descripción del proyecto
-  - Cómo instalar (requisitos, pip install)
-  - Cómo ejecutar (python main.py)
-  - Cómo correr tests (pytest)
-  - Cómo configurar variables de entorno (.env)
-
-- [ ] Existe **.env.example** con variables necesarias
-```
-  CLAUDE_API_KEY=sk-...
-  EXCEL_PATH=./motor.xlsx
-```
-
-- [ ] Existe **requirements.txt** con todas las dependencias y versiones fijas
-
-### Git & Collaboration
-
-- [ ] El código está en un repositorio Git
-- [ ] El commit message es descriptivo
-```
-  git commit -m "feat: implementar ExcelService para parseo de motor.xlsx"
-```
-
-- [ ] No hay archivos temporales (.pyc, __pycache__, .env, etc.) versionados
-- [ ] Existe **.gitignore** apropiado para Python
-
-### Security & Best Practices
-
-- [ ] No hay API Keys o secrets en el código
-- [ ] Todas las dependencias están especificadas en requirements.txt
-- [ ] El código valida inputs antes de procesarlos
-- [ ] Existe manejo de errores básico (try/except)
-
-### Performance
-
-- [ ] El agente responde en menos de 30 segundos
-- [ ] No hay cargadas innecesarias del Excel en cada llamada
-
-### Optional (Nice to have)
-
-- [ ] Existe GitHub Actions o CI pipeline que verifica:
-  - flake8
-  - black --check
-  - pytest with coverage
-
-- [ ] El código está documentado en Notion o similar
+### Entregable Funcional
+- [ ] El Agente es capaz de procesar el prompt: *"Crea un usuario en Contadia en el exterior con PV"* de principio a fin, retornando credenciales válidas en menos de 10 segundos.
 
 ---
+
+**Siguiente paso:** Teniendo este "contrato" listo, el desarrollo real suele empezar por la Infraestructura y el Dominio. ¿Te gustaría que escribamos un ejemplo real de cómo se vería la plantilla JSON `pension_voluntaria.json` y la función de Python que modifica el campo de "residencia" basada en el prompt del usuario?
